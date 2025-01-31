@@ -2,7 +2,13 @@
 \documentclass[../report.tex]{subfiles}
 
 \begin{document}
-    \begin{abstract}
-        Write your abstract here.
+\begin{abstract}
+    This research explores visual domain explainability methods for extending explainability to Automatic Speech Recognition (ASR) systems. We address this gap by adapting AtMan's \cite{NEURIPS2023_c83bc020} attention manipulation approach to analyze how ASR systems, specifically Whisper \cite{radford2023robust}, process audio inputs and generate transcriptions.
+    
+    Our methodology involves systematically perturbing attention scores in Whisper's encoder layers and measuring the resulting changes in cross-entropy loss at both token and sentence levels. By applying different suppression factors and window sizes to attention scores along the temporal axis, we generate local explanation maps that reveal the relationship between temporal frames of log-mel spectrograms and transcribed tokens. We evaluate our approach on the LibriSpeech \cite{panayotov2015librispeech} dataset using Whisper's 'tiny' variant.
+    
+    The results demonstrate that frames containing speech content show significantly higher influence compared to silent segments, and the model's token predictions are most heavily influenced by immediately preceding temporal frames. Additionally, we observe that larger suppression windows and more aggressive suppression factors lead to greater disruption in model predictions. While our adaptation successfully provides temporal explanations, it is limited by its inability to provide frequency-wise interpretations due to Whisper's architecture.
+    
+    This work demonstrates that AtMan can be adapted to ASR models and provides an efficient method for understanding temporal dependencies in transformer-based speech recognition models, while also highlighting the challenges and limitations in adapting the proposed method to audio processing tasks.
     \end{abstract}
 \end{document}

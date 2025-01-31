@@ -5,8 +5,100 @@
     \section{Methodology}
     \label{sec:methodology}
 
-    Describe all conceptual details about your approach in this section.
-    Add any necessary subsections to improve the presentation.
+    % Describe all conceptual details about your approach in this section.
+    % Add any necessary subsections to improve the presentation.
 
-    Feel free to rename this section to better reflect the concrete topic you are discussing.
+    % Feel free to rename this section to better reflect the concrete topic you are discussing.
+
+    In our adaptation of AtMan for Whisper, we adapt the proposed method of single-token attention manipulation from natural language processing to the audio domain, specifically focusing on Whisper's log-mel spectrogram input. While AtMan also proposes a method for handling correlated tokens in visual data, we do not apply this aspect to audio processing for two key reasons:
+    
+    \begin{enumerate}
+        \item Unlike 2D images that are divided into patches, audio input does not have an inherent patch-based structure. In case of Whisper, it processes chunks of 30s audio at a time. We assume that multiple chunks of audio are not correlated to each other.
+        \item Although the audio is converted into a 2D log-mel spectrogram representation, the Whisper encoder processes this representation holistically rather than as discrete patches for generating the embeddings.
+    \end{enumerate}
+
+    In our adaptation of single-token attention manipulation for the audio domain, we modify the attention scores in the attention layers of the Whisper model's encoder by applying suppression factors (values between 0 and 1). These suppression factors indicate the degree of attention suppression, where values closer to 0 indicate stronger suppression and 1 indicates no suppression. For each layer and attention head $u$, we modify the pre-softmax attention scores as:
+
+    \begin{equation}
+    \tilde{H}_{u,*,*} = H_{u,*,*} \circ (f_i)
+    \end{equation}
+
+    where:
+    \begin{itemize}
+    \item $H$ represents attention scores
+    \item $f_i$ is suppression factor for token $i$
+    \item $\circ$ is Hadamard (element-wise) product
+    \item $u$ indexes over all layers and attention heads
+    \end{itemize}
+        
+    After applying attention manipulation, we analyze its impact by measuring the model's cross-entropy loss at both token and sentence levels to quantify the influence of suppressed frames. The audio input is represented as a sequence of log-mel spectrogram frames $x = [x_1, ..., x_N]$, where each $x_i$ represents a temporal frame and $N$ is the total number of frames. Following the original ATMAN paper, we perform perturbations in the embedded token space where the log-mel spectrogram frames are converted to audio features. Our analysis requires maximum 1500 forward passes through Whisper's 'tiny' model, corresponding to the audio context of the encoder model and the number of frames after the encoder's convolutional layers downsample the original 3000 log-mel spectrogram input frames. Through systematic frame-by-frame perturbation and loss measurement, we can pinpoint the temporal segments that have the strongest impact on the final transcription.
+
+    In our implementation, rather than suppressing attention scores for individual frames, we apply suppression across a window of consecutive frames. This windowed approach means that for each perturbation instance, we simultaneously suppress attention scores for multiple adjacent frames within the specified range.
+    The cross-entropy loss is computed for each perturbation by evaluating the difference between the model's predicted logits and the target transcription. This evaluation happens at both the token and sentence level, providing insight into the perturbation's effects at different scales of granularity. The initial computation yields loss values for 1500 frames, which corresponds to the downsampled sequence length after the encoder's convolutional layers. To align with the original 3000-frame temporal sequence of the audio input, we upsample the loss values through linear interpolation, effectively doubling each frame to match the original temporal resolution. This upsampling reverses the stride-2 downsampling performed by the encoder's convolutional layers. The mathematical formulation of the cross-entropy loss, adapted from the original ATMAN paper, is expressed as:
+
+    \begin{equation}
+    \begin{split}
+        L_{target}(x, \theta) = \sum_{t} L_{target}(x_{<t}, \theta) = \\
+        \sum_{t} -\log \text{softmax}(h_\theta(x_{<t})W^T_\theta)_{target_t}
+    \end{split}
+    \label{eq:cross_entropy_loss}
+    \end{equation}
+
+    where:
+    \begin{itemize}
+    \item $L_{target}$ is the cross-entropy loss for a specific target transcription
+    \item $x$ represents the input log-mel spectrogram frames
+    \item $\theta$ represents the model parameters
+    \item $t$ is the position in the output sequence
+    \item $x_{<t}$ represents input frames up to position $t$
+    \item $h_\theta$ denotes the Whisper model (encoder-decoder)
+    \item $W_\theta$ is the learned embedding matrix
+    \item $target_t$ is the vocabulary index of the $t$-th target token in the transcription
+    \end{itemize}
+
+    For a given window of frames that we suppress, we track two types of loss that are formulated as follows:
+
+    \begin{enumerate}
+        \item Token-level loss for each token $t$ in the transcription:
+        \begin{equation}
+            L^t_{token}(x, \theta^{-i}) = -\log \text{softmax}(h_\theta(x_{<t})W^T_\theta)_{target_t}
+        \end{equation}
+
+        \item Sentence-level loss aggregated over all tokens:
+        \begin{equation}
+            L_{sentence}(x, \theta^{-i}) = \sum_{t=1}^{T} L^t_{token}(x, \theta^{-i})
+        \end{equation}
+    \end{enumerate}
+
+
+
+    These influence or loss values can be visualized through explanation maps at both token and sentence levels after upsampling to match the original temporal resolution, which are formulated as follows:
+
+    \begin{enumerate}
+        \item Token-level explanation maps:
+        For each token $t$ in the transcription, we generate a separate plot showing the influence across all frames:
+        \begin{equation}
+        \begin{split}
+            E_{token}(x, target_t) = U((I^t_{token}(x_1, x), \\
+            ..., I^t_{token}(x_N, x)))
+        \end{split}
+        \end{equation}
+        where $U$ represents the upsampling operation from 1500 to 3000 frames. This results in multiple plots, one per transcribed token, where each plot shows which audio frames were most influential for that specific token at the original temporal resolution.
+
+        \item Sentence-level explanation map:
+        A single plot showing the aggregated influence across all frames for the entire transcription:
+        \begin{equation}
+            E_{s}(x, target) = U((I_{s}(x_1, x), ..., I_{s}(x_N, x)))
+        \end{equation}
+        where: 
+        \begin{itemize}
+            \item $s$ is the sentence level
+            \item $U$ is the upsampling operation from 1500 to 3000 frames
+        \end{itemize}
+        
+     These maps provide both a comprehensive view of how individual audio frames influence the complete transcription at the original temporal resolution, as well as detailed token-level insights showing the relationship between specific tokens and different corresponding audio segments.
+    \end{enumerate}
+
+    We apply suppression only to the encoder layers for two key reasons. First, the encoder layers are specifically responsible for processing the audio features that are then passed to the decoder for generating the transcription. Second, our primary goal was to understand the relationship between audio time frames and the resulting transcription, rather than analyzing token-to-token relationships within the decoder (as is common in NLP transformer analysis that requires decoder layer suppression).
+
 \end{document}

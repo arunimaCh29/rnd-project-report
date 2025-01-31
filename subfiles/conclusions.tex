@@ -2,15 +2,46 @@
 \documentclass[../report.tex]{subfiles}
 
 \begin{document}
+
     \section{Conclusions}
     \label{sec:conclusions}
-
     \subsection{Summary}
-    \label{sec:conclusions:summary}
 
-    \subsection{Contributions}
-    \label{sec:conclusions:contributions}
+    This research presents an adaptation of AtMan, an explainability framework designed for generative transformers across multiple modalities, to examine the inner workings of Whisper, a transformer architecture for automatic speech recognition (ASR). By systematically manipulating attention and introducing targeted perturbations, we investigate the model's response when attention is selectively suppressed across different temporal frames of log mel spectrogram generated from the audio input. We selected AtMan specifically because it operates through sequential forward passes, avoiding the computational burden of backpropagation that is typical in many attention-based analysis methods.
 
+    Through comprehensive experiments varying suppression factors and window sizes, we uncovered several key insights about Whisper's behavior. We identified which temporal segments had the strongest influence on both individual token generation and complete transcriptions. Our analysis revealed that speech segments exhibited substantially higher influence compared to silent or padded regions. At the token level, we found that the model's predictions were predominantly influenced by immediately preceding temporal frames, indicating a localized temporal dependency in the attention mechanism. Furthermore, our results demonstrated that increasing both the suppression window size and the aggressiveness of suppression factors led to greater disruption in model predictions, with more aggressive suppression (lower factors) causing higher cross-entropy loss. 
+    This enables us to provide local explainability for the model's behavior in token generation and elucidate the relationship between specific audio time frames and the resulting transcription.
+
+    \subsection{Limitations}
+    \label{sec:conclusions:limitations}
+
+    While the adaptation of AtMan to Whisper ASR looks promising, there are still limitations to the approach.
+    The observed limitations of the approach are noted below:
+
+    \begin{enumerate}
+        \item The adaptation is limited to temporal resolution, making frequency-wise resolution unattainable. This limitation arises because attention manipulation is performed in the encoder layers, which do not allow for frequency-specific adjustments. AtMan's perturbation method, which manipulates the attention, can only perturb over temporal frames.
+        
+        \item Although we can establish a relationship along the temporal axis by noting that the 2nd Convolutional layer in the encoder reduces the temporal axis by half with a stride of 2 and a kernel size of 3, it is not possible to interpret frequency-wise attributions through attention manipulation due to the Whisper architecture's method of processing audio input. The log mel spectrogram, serving as the "audio input," undergoes two 1D Convolutions that preserve time-wise locality. The embeddings fed into the attention layer maintain a time-wise correspondence to the log-mel spectrogram, but the 80 mel channels are transformed into 384 embedding channels. Each of these 384 features for each time frame is a combination of all 80 mel channels.
+
+        \item During token-level analysis, we observed that temporal frames distant from the target token showed unexpected influence on predictions, manifesting as elevated cross-entropy loss. We hypothesize this may be due to token-to-timeframe alignment issues. Specifically, when tokens are split into multiple sub-tokens during processing, calculating loss at each temporal index can result in token position shifts, potentially leading to artificially high loss values in seemingly unrelated temporal regions.
+        \item The evaluation was conducted on a limited number of samples from the LibriSpeech dataset. A more comprehensive evaluation using a larger sample size would provide better insights into the model's behavior. Additionally, while we used Whisper's 'tiny' variant, evaluating other model sizes (base, small, medium, large) would help understand if these findings generalize across model scales.
+        \item The current analysis focused solely on English language audio. Given Whisper's multilingual capabilities, extending this evaluation to other languages would help validate whether these explainability patterns hold across different linguistic contexts.
+        \item This generates a local explanation map for each token in the transcription and for whole transcription over the temporal axis. It would be interesting to generate a global explanation map for the model's behavior, potentially by averaging the local explanation maps of all tokens or at sentence level.
+    \end{enumerate}
+    
+    
     \subsection{Future Work}
     \label{sec:conclusions:future_work}
+    Building upon our current findings, several promising directions for future research emerge:
+
+    \begin{enumerate}
+        
+        \item Analyze frequency-specific attributions, possibly by manipulating the convolutional layers or developing hybrid approaches that combine attention and feature-map manipulation.
+        
+        \item Address the token alignment challenges by developing more sophisticated methods for mapping between temporal frames and output tokens, potentially incorporating forced alignment techniques.
+        
+        \item Expand the analysis to Whisper's multilingual capabilities, investigating how attention patterns and temporal dependencies vary across different languages and acoustic features.
+        
+        \item Apply this methodology across different ASR architectures to understand how various model designs influence temporal dependencies and attention patterns.
+    \end{enumerate}
 \end{document}
